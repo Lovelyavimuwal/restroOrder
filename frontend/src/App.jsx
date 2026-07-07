@@ -5,8 +5,8 @@ import { Link, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const API_URL = 'http://localhost:5000/api';
-const socket = io('http://localhost:5000');
+const API_URL = import.meta.env.VITE_API_URL;
+const socket = io(import.meta.env.VITE_SOCKET_URL);
 const categories = ['Pizza', 'Burger', 'Chinese', 'Indian', 'Desserts', 'Drinks', 'Fast Food'];
 
 const fallbackFoods = [
