@@ -39,19 +39,12 @@ const io = new Server(httpServer, {
 });
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+app.use(cors({ origin: process.env.CLIENT_URL}));
 app.use(express.json());
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 app.use(limiter);
 
-// app.get('/', (_req, res) => {
-//   const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-//   if (_req.accepts('html')) {
-//     return res.redirect(frontendUrl);
-//   }
-//   return res.json({ message: 'Restaurant QR Ordering API is running' });
-// });
 
 app.get("/", (_req, res) => {
   res.json({
