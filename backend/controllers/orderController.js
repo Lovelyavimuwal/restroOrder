@@ -1,10 +1,10 @@
 import Order from '../models/Order.js';
-import { io } from '../server.js';
+import { getIO } from '../socket.js';
 
 export const createOrder = async (req, res) => {
   try {
     const order = await Order.create(req.body);
-    io.emit('new-order', order);
+    getIO()?.emit('new-order', order);
     res.status(201).json(order);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -33,7 +33,7 @@ export const getOrderById = async (req, res) => {
 export const updateOrder = async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    io.emit('status-update', { room: 'admin', order });
+    getIO()?.emit('status-update', { room: 'admin', order });
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: error.message });

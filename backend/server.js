@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+import { initSocket } from './socket.js';
 import authRoutes from './routes/authRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
@@ -31,12 +31,7 @@ const ensureDefaultAdminUser = async () => {
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.CLIENT_URL,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE']
-  }
-});
+initSocket(httpServer);
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL}));
@@ -57,12 +52,6 @@ app.use('/api/foods', foodRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/coupons', couponRoutes);
-
-io.on('connection', (socket) => {
-  socket.on('join-room', (room) => socket.join(room));
-  socket.on('new-order', (order) => io.emit('order-update', order));
-  socket.on('status-update', (payload) => io.to(payload.room).emit('status-update', payload));
-});
 
 const PORT = process.env.PORT || 5000;
 
@@ -98,4 +87,3 @@ mongoose
     process.exit(1);
   });
 
-export { io };

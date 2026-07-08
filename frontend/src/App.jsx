@@ -5,8 +5,20 @@ import { Link, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_API_URL;
-const socket = io(import.meta.env.VITE_SOCKET_URL);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const socket = io(SOCKET_URL);
+
+const getStoredUser = () => {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
 const categories = ['Pizza', 'Burger', 'Chinese', 'Indian', 'Desserts', 'Drinks', 'Fast Food'];
 
 const fallbackFoods = [
@@ -24,7 +36,7 @@ function App() {
   const [cart, setCart] = useState([]);
   const [tableNumber, setTableNumber] = useState(1);
   const [orders, setOrders] = useState([]);
-  const [auth, setAuth] = useState({ token: localStorage.getItem('token') || '', user: JSON.parse(localStorage.getItem('user') || 'null') });
+  const [auth, setAuth] = useState({ token: localStorage.getItem('token') || '', user: getStoredUser() });
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [mode, setMode] = useState('dark');
   const [authMode, setAuthMode] = useState('login');
@@ -44,8 +56,13 @@ function App() {
 
   useEffect(() => {
     axios.get(`${API_URL}/foods`)
-      .then(({ data }) => setFoods(data.length ? data : fallbackFoods))
-      .catch(() => setFoods(fallbackFoods));
+      .then(({ data }) => {
+        // FIXED: Ensure we always set an array
+        setFoods(Array.isArray(data) && data.length > 0 ? data : fallbackFoods);
+      })
+      .catch(() => {
+        setFoods(fallbackFoods);
+      });
   }, []);
 
   useEffect(() => {
@@ -53,7 +70,6 @@ function App() {
       setOrders([]);
       return;
     }
-
     setLoadingOrders(true);
     axios.get(`${API_URL}/orders`, {
       headers: { Authorization: `Bearer ${auth.token}` }
@@ -66,7 +82,6 @@ function App() {
   useEffect(() => {
     const onNewOrder = (order) => setOrders((prev) => [order, ...prev]);
     const onStatusUpdate = ({ order }) => setOrders((prev) => prev.map((item) => item._id === order._id ? order : item));
-
     socket.on('new-order', onNewOrder);
     socket.on('status-update', onStatusUpdate);
     return () => {
@@ -95,6 +110,10 @@ function App() {
   };
 
   const placeOrder = async () => {
+    if (cart.length === 0) {
+      alert('Add items to your cart before placing an order');
+      return;
+    }
     try {
       const payload = {
         tableNumber,
@@ -110,8 +129,8 @@ function App() {
       setOrders((prev) => [data, ...prev]);
       setCart([]);
       alert('Order placed successfully');
-    } catch {
-      alert('Unable to place order');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Unable to place order. Make sure the backend server is running.');
     }
   };
 
@@ -126,9 +145,10 @@ function App() {
       setAuth({ token: data.token, user: data.user });
       setAuthError('');
       alert('Logged in');
-    } catch {
-      setAuthError('Login failed');
-      alert('Login failed');
+    } catch (err) {
+      const message = err.response?.data?.message || 'Login failed';
+      setAuthError(message);
+      alert(message);
     }
   };
 
@@ -138,17 +158,14 @@ function App() {
     const email = form.get('email');
     const password = form.get('password');
     const confirmPassword = form.get('confirmPassword');
-
     if (authMode === 'signup' && password !== confirmPassword) {
       setAuthError('Passwords do not match');
       return;
     }
-
     const endpoint = authMode === 'signup' ? `${API_URL}/auth/signup` : `${API_URL}/auth/login`;
     const payload = authMode === 'signup'
       ? { name: form.get('name'), email, password, role: 'customer' }
       : { email, password };
-
     try {
       const { data } = await axios.post(endpoint, payload);
       localStorage.setItem('token', data.token);
@@ -186,7 +203,6 @@ function App() {
       alert('Only admins can add menu items');
       return;
     }
-
     try {
       const payload = {
         ...newFood,
@@ -196,7 +212,6 @@ function App() {
         veg: Boolean(newFood.veg),
         available: Boolean(newFood.available)
       };
-
       const { data } = await axios.post(`${API_URL}/foods`, payload, {
         headers: { Authorization: `Bearer ${auth.token}` }
       });
@@ -217,11 +232,14 @@ function App() {
     }
   };
 
-  const filteredFoods = foods.filter((food) => {
-    const matchesCategory = filter === 'All' || food.category === filter;
-    const matchesSearch = food.name.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // FIXED: Safe filtering with fallback
+  const filteredFoods = Array.isArray(foods) 
+    ? foods.filter((food) => {
+        const matchesCategory = filter === 'All' || food.category === filter;
+        const matchesSearch = food.name.toLowerCase().includes(search.toLowerCase());
+        return matchesCategory && matchesSearch;
+      })
+    : [];
 
   return (
     <div className={mode === 'dark' ? 'min-h-screen bg-slate-950 text-slate-100' : 'min-h-screen bg-stone-50 text-slate-900'}>
@@ -243,7 +261,6 @@ function App() {
           </div>
         </div>
       </header>
-
       <main className="mx-auto max-w-7xl px-4 py-8">
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -275,7 +292,7 @@ function App() {
                   ))}
                 </div>
               </section>
-
+              {/* ... rest of your cart aside remains unchanged ... */}
               <aside className="rounded-3xl border border-white/10 bg-slate-900/80 p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-xl font-semibold">Your Cart</h2>
@@ -310,6 +327,7 @@ function App() {
   );
 }
 
+// All other components (LandingPage, AccountPage, AdminPanel) remain exactly the same
 function LandingPage() {
   return (
     <div className="space-y-8">
@@ -333,7 +351,6 @@ function LandingPage() {
           </div>
         </div>
       </motion.section>
-
       <section className="grid gap-4 md:grid-cols-3">
         {['Popular Dishes', 'Warm Hospitality', 'Live Kitchen Updates'].map((item) => <div key={item} className="rounded-3xl border border-white/10 bg-slate-900/60 p-5"><h3 className="text-xl font-semibold">{item}</h3><p className="mt-2 text-slate-400">Crafted for speed, flavor, and a premium guest experience.</p></div>)}
       </section>
@@ -376,7 +393,6 @@ function AdminPanel({ auth, login, orders, logout, updateOrderStatus, loadingOrd
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const pendingCount = orders.filter((order) => order.status !== 'Served').length;
   const completedCount = orders.filter((order) => order.status === 'Served').length;
-
   return (
     <div className="space-y-6">
       {!auth.token || !isAdmin ? (
@@ -396,7 +412,6 @@ function AdminPanel({ auth, login, orders, logout, updateOrderStatus, loadingOrd
             </div>
             <button onClick={logout} className="rounded-full border border-white/10 px-4 py-2 text-sm">Logout</button>
           </div>
-
           <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/60 p-5">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-semibold">Add Menu Item</h3>
@@ -422,7 +437,6 @@ function AdminPanel({ auth, login, orders, logout, updateOrderStatus, loadingOrd
               <button className="md:col-span-2 rounded-full bg-amber-500 px-4 py-3 font-semibold text-slate-950">Add item to menu</button>
             </form>
           </div>
-
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-5">
               <h3 className="text-lg font-semibold">Today&apos;s Orders</h3>
@@ -441,7 +455,6 @@ function AdminPanel({ auth, login, orders, logout, updateOrderStatus, loadingOrd
               <p className="mt-2 text-2xl font-semibold text-amber-400">{completedCount}</p>
             </div>
           </div>
-
           <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/60 p-5">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-semibold">Live Orders</h3>
