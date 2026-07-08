@@ -34,7 +34,12 @@ const httpServer = createServer(app);
 initSocket(httpServer);
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL}));
+app.use(
+  cors({
+    origin: ["https://restroorder-2.onrender.com"],
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
